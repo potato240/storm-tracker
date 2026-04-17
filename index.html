@@ -2,20 +2,315 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Test</title>
+  <title>Live Weather Warnings</title>
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #b00; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    button {
+      padding: 0.5rem 1rem;
+      border: 2px solid #b00;
+      border-radius: 6px;
+      background: white;
+      color: #b00;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button.active { background: #b00; color: white; }
+    .warning {
+      border: 2px solid #ccc;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      overflow: hidden;
+      position: relative;
+    }
+    .warning:hover { background: #fafafa; }
+    .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .warning p { margin: 0; font-size: 0.9rem; color: #333; }
+
+    .card-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 0.75rem;
+    }
+    .eas-button {
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      border: 1.5px solid currentColor;
+      background: white;
+      cursor: pointer;
+    }
+
+    #status { color: #555; font-style: italic; }
+
+    /* Sits between the footer and the timer bar.
+       text-align centres the emoji above the middle of the bar. */
+    .map-indicator {
+      text-align: center;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      margin-bottom: 0.25rem;
+      line-height: 1;
+    }
+
+    .timer-bar {
+      position: relative;
+      height: 6px;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .timer-left {
+      position: absolute;
+      left: 0; top: 0;
+      height: 100%;
+      width: 50%;
+      transition: width 1s linear;
+    }
+    .timer-right {
+      position: absolute;
+      right: 0; top: 0;
+      height: 100%;
+      width: 50%;
+      transition: width 1s linear;
+    }
+
+    #map-container { display: none; margin-bottom: 1.5rem; }
+    #map-title { font-weight: bold; margin-bottom: 0.5rem; color: #b00; }
+    #map { height: 350px; border-radius: 6px; border: 2px solid #b00; }
+
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+    #popup {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 1001;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    #popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    #popup-title {
+      font-weight: bold;
+      font-size: 0.95rem;
+      color: #333;
+      margin-right: 1rem;
+    }
+    #popup-close {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: #666;
+      line-height: 1;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    #popup-close:hover { color: #000; }
+    #popup-body {
+      font-family: monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      color: #222;
+    }
+  </style>
 </head>
 <body>
-  <p id="status">Loading...</p>
+
+  <h1>⛈️ Live Weather Warnings</h1>
+
+  <div class="buttons">
+    <button onclick="load('Special Weather Statement', this)">Special Weather Statements</button>
+    <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm</button>
+    <button onclick="load('Red Flag Warning', this)">Red Flag</button>
+    <button onclick="load('Tornado Warning', this)">Tornado</button>
+  </div>
+
+  <p id="status">Choose a warning type above.</p>
+
+  <div id="map-container">
+    <p id="map-title"></p>
+    <div id="map"></div>
+  </div>
+
+  <div id="warnings"></div>
+
+  <div id="overlay" onclick="closePopup()"></div>
+  <div id="popup" style="display:none">
+    <div id="popup-header">
+      <span id="popup-title"></span>
+      <button id="popup-close" onclick="closePopup()">✕</button>
+    </div>
+    <div id="popup-body"></div>
+  </div>
+
   <script>
-    fetch('/api/warnings?event=Special%20Weather%20Statement')
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById('status').textContent =
-          'Got ' + data.features.length + ' warnings.';
-      })
-      .catch(err => {
-        document.getElementById('status').textContent = 'Error: ' + err.message;
-      });
+
+    const status       = document.getElementById('status');
+    const warningsDiv  = document.getElementById('warnings');
+    const mapContainer = document.getElementById('map-container');
+    const mapTitle     = document.getElementById('map-title');
+    const overlay      = document.getElementById('overlay');
+    const popup        = document.getElementById('popup');
+    const popupTitle   = document.getElementById('popup-title');
+    const popupBody    = document.getElementById('popup-body');
+
+    const map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    let currentPolygon = null;
+
+    const COLORS = {
+      'Tornado Warning':             '#cc0000',
+      'Red Flag Warning':            '#800080',
+      'Special Weather Statement':   '#c8a96e',
+      'Severe Thunderstorm Warning': '#cccc00'
+    };
+
+    function getColor(type) {
+      return COLORS[type] || '#888';
+    }
+
+    function openPopup(p) {
+      popupTitle.textContent = p.headline;
+      popupBody.textContent  = p.description;
+      overlay.style.display  = 'block';
+      popup.style.display    = 'block';
+    }
+
+    function closePopup() {
+      overlay.style.display = 'none';
+      popup.style.display   = 'none';
+    }
+
+    function updateBar(leftEl, rightEl, start, expires) {
+      const total     = expires - start;
+      const elapsed   = Date.now() - start;
+      const fraction  = Math.min(elapsed / total, 1);
+      const remaining = 50 * (1 - fraction);
+      leftEl.style.width  = remaining + '%';
+      rightEl.style.width = remaining + '%';
+    }
+
+    function showMap(feature, color) {
+      if (!feature.geometry || !feature.geometry.coordinates) {
+        alert('No map polygon available for this warning.');
+        return;
+      }
+      const latLngs = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+      if (currentPolygon) map.removeLayer(currentPolygon);
+      currentPolygon = L.polygon(latLngs, {
+        color: color,
+        fillColor: color,
+        fillOpacity: 0.2
+      }).addTo(map);
+      map.fitBounds(currentPolygon.getBounds());
+      mapContainer.style.display = 'block';
+      mapTitle.textContent = feature.properties.headline;
+      map.invalidateSize();
+      mapContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function load(type, button) {
+      document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      button.classList.add('active');
+      warningsDiv.innerHTML = '';
+      mapContainer.style.display = 'none';
+      status.textContent = 'Loading...';
+
+      const color = getColor(type);
+      const url   = '/api/warnings?event=' + encodeURIComponent(type);
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+
+          const features = data.features;
+
+          status.textContent = features.length > 0
+            ? `${features.length} active ${type.toLowerCase()}(s) as of ${new Date().toLocaleTimeString()}. Click a warning to see it on the map.`
+            : `No active ${type.toLowerCase()}s right now.`;
+
+          features.forEach(feature => {
+            const p = feature.properties;
+
+            const start   = new Date(p.effective).getTime();
+            const expires = new Date(p.expires).getTime();
+
+            // Check right now whether this warning has a polygon.
+            // We use this to pick the emoji and to decide whether
+            // clicking the card should try to show a map.
+            const hasPolygon = !!(feature.geometry && feature.geometry.coordinates);
+            const mapSymbol  = hasPolygon ? '🗺️' : '❌';
+
+            const card = document.createElement('div');
+            card.className = 'warning';
+            card.style.borderColor = color;
+
+            card.innerHTML = `
+              <h2>${p.headline}</h2>
+              <p><strong>Area:</strong> ${p.areaDesc}</p>
+              <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
+              <div class="card-footer">
+                <button class="eas-button" style="color:${color}; border-color:${color}">EAS Text</button>
+              </div>
+              <div class="map-indicator" title="${hasPolygon ? 'Map polygon available' : 'No map polygon available'}">${mapSymbol}</div>
+              <div class="timer-bar">
+                <div class="timer-left"  style="background:${color}"></div>
+                <div class="timer-right" style="background:${color}"></div>
+              </div>
+            `;
+
+            const leftEl  = card.querySelector('.timer-left');
+            const rightEl = card.querySelector('.timer-right');
+            const easBtn  = card.querySelector('.eas-button');
+
+            updateBar(leftEl, rightEl, start, expires);
+            setInterval(() => updateBar(leftEl, rightEl, start, expires), 1000);
+
+            easBtn.addEventListener('click', e => {
+              e.stopPropagation();
+              openPopup(p);
+            });
+
+            card.addEventListener('click', () => showMap(feature, color));
+            warningsDiv.appendChild(card);
+          });
+        })
+        .catch(error => {
+          status.textContent = 'Could not load warnings — check your connection.';
+          console.error(error);
+        });
+    }
+
   </script>
+
 </body>
 </html>
