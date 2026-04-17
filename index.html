@@ -144,7 +144,8 @@
 
   <div class="buttons">
     <button onclick="load('Special Weather Statement', this)">Special Weather Statements</button>
-    <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm</button>
+    <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm Warning</button>
+    <button onclick="load('Severe Thunderstorm Watch', this)">Severe Thunderstorm Watch</button>
     <button onclick="load('Red Flag Warning', this)">Red Flag</button>
     <button onclick="load('Tornado Warning', this)">Tornado Warning</button>
     <button onclick="load('Tornado Watch', this)">Tornado Watch</button>
@@ -187,11 +188,12 @@
     let currentLayers = [];
 
     const COLORS = {
-      'Tornado Warning':             '#cc0000',
-      'Red Flag Warning':            '#800080',
-      'Special Weather Statement':   '#c8a96e',
-      'Severe Thunderstorm Warning': '#cccc00',
-      'Tornado Watch':               '#ff8c00'
+      'Tornado Warning':               '#cc0000',
+      'Tornado Watch':                 '#ff8c00',
+      'Red Flag Warning':              '#800080',
+      'Special Weather Statement':     '#c8a96e',
+      'Severe Thunderstorm Warning':   '#cccc00',
+      'Severe Thunderstorm Watch':     '#4a90d9'
     };
 
     function getColor(type) {
@@ -224,7 +226,6 @@
       currentLayers = [];
     }
 
-    // Fix irregular plurals so the status line reads correctly.
     function pluralise(type) {
       return type.toLowerCase().replace('watchs', 'watches');
     }
