@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <title>Live Weather Warnings</title>
+
+  <!-- Leaflet is the free map tool. These two lines load it in. -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+
   <style>
     body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
     h1 { color: #b00; }
@@ -16,21 +21,40 @@
       cursor: pointer;
       font-size: 0.9rem;
     }
-    button.active {
-      background: #b00;
-      color: white;
+    button.active { background: #b00; color: white; }
+    .warning {
+      border: 2px solid #b00;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      cursor: pointer;
     }
-    .warning { border: 2px solid #b00; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    .warning:hover { background: #fff5f5; }
     .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
     .warning p { margin: 0; font-size: 0.9rem; color: #333; }
     #status { color: #555; font-style: italic; }
+
+    /* The map box. Hidden until a warning is clicked. */
+    #map-container {
+      display: none;
+      margin-bottom: 1.5rem;
+    }
+    #map-title {
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+      color: #b00;
+    }
+    #map {
+      height: 350px;
+      border-radius: 6px;
+      border: 2px solid #b00;
+    }
   </style>
 </head>
 <body>
 
   <h1>⛈️ Live Weather Warnings</h1>
 
-  <!-- Four buttons, one per warning type -->
   <div class="buttons">
     <button onclick="load('Special Weather Statement', this)">Special Weather Statements</button>
     <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm</button>
@@ -39,28 +63,89 @@
   </div>
 
   <p id="status">Choose a warning type above.</p>
+
+  <!-- The map appears here when a warning is clicked -->
+  <div id="map-container">
+    <p id="map-title"></p>
+    <div id="map"></div>
+  </div>
+
   <div id="warnings"></div>
 
   <script>
 
-    const status   = document.getElementById('status');
-    const warnings = document.getElementById('warnings');
+    const status      = document.getElementById('status');
+    const warningsDiv = document.getElementById('warnings');
+    const mapContainer = document.getElementById('map-container');
+    const mapTitle    = document.getElementById('map-title');
 
-    // This function runs whenever a button is clicked.
-    // "type" is the warning name, "button" is whichever button was clicked.
+    // Set up the Leaflet map once. We'll reuse it every time a warning is clicked.
+    // The map starts hidden so we create it but don't show it yet.
+    const map = L.map('map');
+
+    // This loads the actual map tiles — the street/terrain graphics.
+    // OpenStreetMap is free and needs no account.
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // We'll store the current polygon here so we can remove it
+    // before drawing a new one when a different warning is clicked.
+    let currentPolygon = null;
+
+    function showMap(feature) {
+
+      // Each warning has a geometry section with coordinates.
+      // But some warnings use zones instead of polygons — those won't have geometry.
+      // We check for it before trying to draw.
+      if (!feature.geometry || !feature.geometry.coordinates) {
+        alert('No map polygon available for this warning.');
+        return;
+      }
+
+      // GeoJSON coordinates come as [longitude, latitude].
+      // Leaflet wants them as [latitude, longitude] — the opposite order.
+      // So we flip each pair around.
+      const latLngs = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+
+      // Remove the previous polygon if there was one.
+      if (currentPolygon) {
+        map.removeLayer(currentPolygon);
+      }
+
+      // Draw the new polygon in red on the map.
+      currentPolygon = L.polygon(latLngs, {
+        color: '#b00',
+        fillColor: '#b00',
+        fillOpacity: 0.2
+      }).addTo(map);
+
+      // Zoom the map to fit the polygon perfectly.
+      map.fitBounds(currentPolygon.getBounds());
+
+      // Show the map box and update the title above it.
+      mapContainer.style.display = 'block';
+      mapTitle.textContent = feature.properties.headline;
+
+      // Leaflet sometimes gets confused when shown after being hidden.
+      // This line tells it to recalculate its size.
+      map.invalidateSize();
+
+      // Scroll the map into view smoothly.
+      mapContainer.scrollIntoView({ behavior: 'smooth' });
+    }
+
     function load(type, button) {
 
-      // Mark the clicked button as active (turns it red)
-      // and remove active from any other button.
+      // Highlight the active button.
       document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
       button.classList.add('active');
 
-      // Clear out whatever warnings are currently showing.
-      warnings.innerHTML = '';
+      // Clear old warnings and hide the map.
+      warningsDiv.innerHTML = '';
+      mapContainer.style.display = 'none';
       status.textContent = 'Loading...';
 
-      // Build the URL using the warning type that was passed in.
-      // encodeURIComponent turns spaces into %20 so the URL works properly.
       const url = '/api/warnings?event=' + encodeURIComponent(type);
 
       fetch(url)
@@ -70,7 +155,7 @@
           const features = data.features;
 
           status.textContent = features.length > 0
-            ? `${features.length} active ${type.toLowerCase()}(s) as of ${new Date().toLocaleTimeString()}.`
+            ? `${features.length} active ${type.toLowerCase()}(s) as of ${new Date().toLocaleTimeString()}. Click a warning to see it on the map.`
             : `No active ${type.toLowerCase()}s right now.`;
 
           features.forEach(feature => {
@@ -85,7 +170,11 @@
               <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
             `;
 
-            warnings.appendChild(card);
+            // When the card is clicked, call showMap with the full feature
+            // so it has access to both the geometry and the properties.
+            card.addEventListener('click', () => showMap(feature));
+
+            warningsDiv.appendChild(card);
           });
         })
         .catch(error => {
