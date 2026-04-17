@@ -224,6 +224,11 @@
       currentLayers = [];
     }
 
+    // Fix irregular plurals so the status line reads correctly.
+    function pluralise(type) {
+      return type.toLowerCase().replace('watchs', 'watches');
+    }
+
     async function showMap(feature, color) {
 
       clearLayers();
@@ -288,8 +293,8 @@
           const features = data.features;
 
           status.textContent = features.length > 0
-            ? `${features.length} active ${type.toLowerCase()}(s) as of ${new Date().toLocaleTimeString()}. Click a warning to see it on the map.`
-            : `No active ${type.toLowerCase()}s right now.`;
+            ? `${features.length} active ${pluralise(type)} as of ${new Date().toLocaleTimeString()}. Click a warning to see it on the map.`
+            : `No active ${pluralise(type)} right now.`;
 
           features.forEach(feature => {
             const p = feature.properties;
