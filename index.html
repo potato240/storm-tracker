@@ -33,10 +33,24 @@
     .warning:hover { background: #fafafa; }
     .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
     .warning p { margin: 0; font-size: 0.9rem; color: #333; }
+
+    /* The row that holds the EAS button, sitting at the bottom of each card */
+    .card-footer {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 0.75rem;
+    }
+    .eas-button {
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+      border: 1.5px solid currentColor;
+      background: white;
+      cursor: pointer;
+    }
+
     #status { color: #555; font-style: italic; }
 
-    /* The timer bar sits at the bottom of each card.
-       It's a container with two colored halves shrinking inward. */
     .timer-bar {
       position: relative;
       height: 6px;
@@ -45,8 +59,6 @@
       border-radius: 3px;
       overflow: hidden;
     }
-
-    /* Left half — shrinks from the left toward the middle */
     .timer-left {
       position: absolute;
       left: 0;
@@ -55,8 +67,6 @@
       width: 50%;
       transition: width 1s linear;
     }
-
-    /* Right half — shrinks from the right toward the middle */
     .timer-right {
       position: absolute;
       right: 0;
@@ -69,6 +79,64 @@
     #map-container { display: none; margin-bottom: 1.5rem; }
     #map-title { font-weight: bold; margin-bottom: 0.5rem; color: #b00; }
     #map { height: 350px; border-radius: 6px; border: 2px solid #b00; }
+
+    /* The dark overlay that appears behind the popup */
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+
+    /* The popup box itself */
+    #popup {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      z-index: 1001;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    #popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+    }
+    #popup-title {
+      font-weight: bold;
+      font-size: 0.95rem;
+      color: #333;
+      margin-right: 1rem;
+    }
+    #popup-close {
+      background: none;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: #666;
+      line-height: 1;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    #popup-close:hover { color: #000; }
+
+    /* The EAS text — monospace font because that's how EAS text looks */
+    #popup-body {
+      font-family: monospace;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      color: #222;
+    }
   </style>
 </head>
 <body>
@@ -91,12 +159,28 @@
 
   <div id="warnings"></div>
 
+  <!-- The dark background behind the popup -->
+  <div id="overlay" onclick="closePopup()"></div>
+
+  <!-- The popup itself -->
+  <div id="popup" style="display:none">
+    <div id="popup-header">
+      <span id="popup-title"></span>
+      <button id="popup-close" onclick="closePopup()">✕</button>
+    </div>
+    <div id="popup-body"></div>
+  </div>
+
   <script>
 
     const status       = document.getElementById('status');
     const warningsDiv  = document.getElementById('warnings');
     const mapContainer = document.getElementById('map-container');
     const mapTitle     = document.getElementById('map-title');
+    const overlay      = document.getElementById('overlay');
+    const popup        = document.getElementById('popup');
+    const popupTitle   = document.getElementById('popup-title');
+    const popupBody    = document.getElementById('popup-body');
 
     const map = L.map('map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -105,12 +189,10 @@
 
     let currentPolygon = null;
 
-    // One color per warning type.
-    // These are used for the card border, the timer bar, and the map polygon.
     const COLORS = {
-      'Tornado Warning':           '#cc0000',
-      'Red Flag Warning':          '#800080',
-      'Special Weather Statement': '#c8a96e',
+      'Tornado Warning':             '#cc0000',
+      'Red Flag Warning':            '#800080',
+      'Special Weather Statement':   '#c8a96e',
       'Severe Thunderstorm Warning': '#cccc00'
     };
 
@@ -118,15 +200,25 @@
       return COLORS[type] || '#888';
     }
 
-    // This runs every second for each card and updates the timer bar.
-    // It works out what fraction of the warning's lifetime has elapsed,
-    // then shrinks both halves of the bar by that fraction.
+    // Show the popup with the EAS text for this warning.
+    // The description field is the full EAS-style message text.
+    function openPopup(p) {
+      popupTitle.textContent = p.headline;
+      popupBody.textContent  = p.description;
+      overlay.style.display  = 'block';
+      popup.style.display    = 'block';
+    }
+
+    // Hide the popup when the X or the dark background is clicked.
+    function closePopup() {
+      overlay.style.display = 'none';
+      popup.style.display   = 'none';
+    }
+
     function updateBar(leftEl, rightEl, start, expires) {
       const total    = expires - start;
       const elapsed  = Date.now() - start;
       const fraction = Math.min(elapsed / total, 1);
-
-      // Each half starts at 50% width and shrinks to 0% as time runs out.
       const remaining = 50 * (1 - fraction);
       leftEl.style.width  = remaining + '%';
       rightEl.style.width = remaining + '%';
@@ -137,19 +229,13 @@
         alert('No map polygon available for this warning.');
         return;
       }
-
       const latLngs = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
-
-      if (currentPolygon) {
-        map.removeLayer(currentPolygon);
-      }
-
+      if (currentPolygon) map.removeLayer(currentPolygon);
       currentPolygon = L.polygon(latLngs, {
         color: color,
         fillColor: color,
         fillOpacity: 0.2
       }).addTo(map);
-
       map.fitBounds(currentPolygon.getBounds());
       mapContainer.style.display = 'block';
       mapTitle.textContent = feature.properties.headline;
@@ -160,7 +246,6 @@
     function load(type, button) {
       document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
       button.classList.add('active');
-
       warningsDiv.innerHTML = '';
       mapContainer.style.display = 'none';
       status.textContent = 'Loading...';
@@ -181,8 +266,6 @@
           features.forEach(feature => {
             const p = feature.properties;
 
-            // Work out start and expiry as timestamps (milliseconds).
-            // That's what Date.now() uses so we can subtract them.
             const start   = new Date(p.effective).getTime();
             const expires = new Date(p.expires).getTime();
 
@@ -194,21 +277,28 @@
               <h2>${p.headline}</h2>
               <p><strong>Area:</strong> ${p.areaDesc}</p>
               <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
+              <div class="card-footer">
+                <button class="eas-button" style="color:${color}; border-color:${color}">EAS Text</button>
+              </div>
               <div class="timer-bar">
                 <div class="timer-left"  style="background:${color}"></div>
                 <div class="timer-right" style="background:${color}"></div>
               </div>
             `;
 
-            // Grab the two bar halves we just created.
-            const leftEl  = card.querySelector('.timer-left');
-            const rightEl = card.querySelector('.timer-right');
+            const leftEl   = card.querySelector('.timer-left');
+            const rightEl  = card.querySelector('.timer-right');
+            const easBtn   = card.querySelector('.eas-button');
 
-            // Set the bar immediately so it doesn't start at full width.
             updateBar(leftEl, rightEl, start, expires);
-
-            // Then update it every second so it visibly ticks down.
             setInterval(() => updateBar(leftEl, rightEl, start, expires), 1000);
+
+            // Clicking the EAS button opens the popup.
+            // stopPropagation stops the click also triggering the map.
+            easBtn.addEventListener('click', e => {
+              e.stopPropagation();
+              openPopup(p);
+            });
 
             card.addEventListener('click', () => showMap(feature, color));
             warningsDiv.appendChild(card);
