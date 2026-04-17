@@ -2,10 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Live Severe Thunderstorm Warnings</title>
+  <title>Live Weather Warnings</title>
   <style>
     body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
     h1 { color: #b00; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    button {
+      padding: 0.5rem 1rem;
+      border: 2px solid #b00;
+      border-radius: 6px;
+      background: white;
+      color: #b00;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    button.active {
+      background: #b00;
+      color: white;
+    }
     .warning { border: 2px solid #b00; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
     .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
     .warning p { margin: 0; font-size: 0.9rem; color: #333; }
@@ -14,8 +28,17 @@
 </head>
 <body>
 
-  <h1>⛈️ Live Severe Thunderstorm Warnings</h1>
-  <p id="status">Loading...</p>
+  <h1>⛈️ Live Weather Warnings</h1>
+
+  <!-- Four buttons, one per warning type -->
+  <div class="buttons">
+    <button onclick="load('Special Weather Statement', this)">Special Weather Statements</button>
+    <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm</button>
+    <button onclick="load('Red Flag Warning', this)">Red Flag</button>
+    <button onclick="load('Tornado Warning', this)">Tornado</button>
+  </div>
+
+  <p id="status">Choose a warning type above.</p>
   <div id="warnings"></div>
 
   <script>
@@ -23,37 +46,53 @@
     const status   = document.getElementById('status');
     const warnings = document.getElementById('warnings');
 
-    const API_URL = '/api/warnings';
+    // This function runs whenever a button is clicked.
+    // "type" is the warning name, "button" is whichever button was clicked.
+    function load(type, button) {
 
-    fetch(API_URL)
-      .then(response => response.json())
-      .then(data => {
+      // Mark the clicked button as active (turns it red)
+      // and remove active from any other button.
+      document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      button.classList.add('active');
 
-        const features = data.features;
+      // Clear out whatever warnings are currently showing.
+      warnings.innerHTML = '';
+      status.textContent = 'Loading...';
 
-        status.textContent = features.length > 0
-          ? `${features.length} active severe thunderstorm warning(s) as of ${new Date().toLocaleTimeString()}.`
-          : 'No active severe thunderstorm warnings right now.';
+      // Build the URL using the warning type that was passed in.
+      // encodeURIComponent turns spaces into %20 so the URL works properly.
+      const url = '/api/warnings?event=' + encodeURIComponent(type);
 
-        features.forEach(feature => {
-          const p = feature.properties;
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
 
-          const card = document.createElement('div');
-          card.className = 'warning';
+          const features = data.features;
 
-          card.innerHTML = `
-            <h2>${p.headline}</h2>
-            <p><strong>Area:</strong> ${p.areaDesc}</p>
-            <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
-          `;
+          status.textContent = features.length > 0
+            ? `${features.length} active ${type.toLowerCase()}(s) as of ${new Date().toLocaleTimeString()}.`
+            : `No active ${type.toLowerCase()}s right now.`;
 
-          warnings.appendChild(card);
+          features.forEach(feature => {
+            const p = feature.properties;
+
+            const card = document.createElement('div');
+            card.className = 'warning';
+
+            card.innerHTML = `
+              <h2>${p.headline}</h2>
+              <p><strong>Area:</strong> ${p.areaDesc}</p>
+              <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
+            `;
+
+            warnings.appendChild(card);
+          });
+        })
+        .catch(error => {
+          status.textContent = 'Could not load warnings — check your connection.';
+          console.error(error);
         });
-      })
-      .catch(error => {
-        status.textContent = 'Could not load warnings — check your connection.';
-        console.error(error);
-      });
+    }
 
   </script>
 
