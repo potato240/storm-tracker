@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Live Weather Warnings</title>
 
-  <!-- Leaflet is the free map tool. These two lines load it in. -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
@@ -23,32 +22,53 @@
     }
     button.active { background: #b00; color: white; }
     .warning {
-      border: 2px solid #b00;
+      border: 2px solid #ccc;
       border-radius: 6px;
       padding: 1rem;
       margin-bottom: 1rem;
       cursor: pointer;
+      overflow: hidden;
+      position: relative;
     }
-    .warning:hover { background: #fff5f5; }
+    .warning:hover { background: #fafafa; }
     .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
     .warning p { margin: 0; font-size: 0.9rem; color: #333; }
     #status { color: #555; font-style: italic; }
 
-    /* The map box. Hidden until a warning is clicked. */
-    #map-container {
-      display: none;
-      margin-bottom: 1.5rem;
+    /* The timer bar sits at the bottom of each card.
+       It's a container with two colored halves shrinking inward. */
+    .timer-bar {
+      position: relative;
+      height: 6px;
+      margin-top: 0.75rem;
+      background: #eee;
+      border-radius: 3px;
+      overflow: hidden;
     }
-    #map-title {
-      font-weight: bold;
-      margin-bottom: 0.5rem;
-      color: #b00;
+
+    /* Left half — shrinks from the left toward the middle */
+    .timer-left {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 50%;
+      transition: width 1s linear;
     }
-    #map {
-      height: 350px;
-      border-radius: 6px;
-      border: 2px solid #b00;
+
+    /* Right half — shrinks from the right toward the middle */
+    .timer-right {
+      position: absolute;
+      right: 0;
+      top: 0;
+      height: 100%;
+      width: 50%;
+      transition: width 1s linear;
     }
+
+    #map-container { display: none; margin-bottom: 1.5rem; }
+    #map-title { font-weight: bold; margin-bottom: 0.5rem; color: #b00; }
+    #map { height: 350px; border-radius: 6px; border: 2px solid #b00; }
   </style>
 </head>
 <body>
@@ -64,7 +84,6 @@
 
   <p id="status">Choose a warning type above.</p>
 
-  <!-- The map appears here when a warning is clicked -->
   <div id="map-container">
     <p id="map-title"></p>
     <div id="map"></div>
@@ -74,79 +93,80 @@
 
   <script>
 
-    const status      = document.getElementById('status');
-    const warningsDiv = document.getElementById('warnings');
+    const status       = document.getElementById('status');
+    const warningsDiv  = document.getElementById('warnings');
     const mapContainer = document.getElementById('map-container');
-    const mapTitle    = document.getElementById('map-title');
+    const mapTitle     = document.getElementById('map-title');
 
-    // Set up the Leaflet map once. We'll reuse it every time a warning is clicked.
-    // The map starts hidden so we create it but don't show it yet.
     const map = L.map('map');
-
-    // This loads the actual map tiles — the street/terrain graphics.
-    // OpenStreetMap is free and needs no account.
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // We'll store the current polygon here so we can remove it
-    // before drawing a new one when a different warning is clicked.
     let currentPolygon = null;
 
-    function showMap(feature) {
+    // One color per warning type.
+    // These are used for the card border, the timer bar, and the map polygon.
+    const COLORS = {
+      'Tornado Warning':           '#cc0000',
+      'Red Flag Warning':          '#800080',
+      'Special Weather Statement': '#c8a96e',
+      'Severe Thunderstorm Warning': '#cccc00'
+    };
 
-      // Each warning has a geometry section with coordinates.
-      // But some warnings use zones instead of polygons — those won't have geometry.
-      // We check for it before trying to draw.
+    function getColor(type) {
+      return COLORS[type] || '#888';
+    }
+
+    // This runs every second for each card and updates the timer bar.
+    // It works out what fraction of the warning's lifetime has elapsed,
+    // then shrinks both halves of the bar by that fraction.
+    function updateBar(leftEl, rightEl, start, expires) {
+      const total    = expires - start;
+      const elapsed  = Date.now() - start;
+      const fraction = Math.min(elapsed / total, 1);
+
+      // Each half starts at 50% width and shrinks to 0% as time runs out.
+      const remaining = 50 * (1 - fraction);
+      leftEl.style.width  = remaining + '%';
+      rightEl.style.width = remaining + '%';
+    }
+
+    function showMap(feature, color) {
       if (!feature.geometry || !feature.geometry.coordinates) {
         alert('No map polygon available for this warning.');
         return;
       }
 
-      // GeoJSON coordinates come as [longitude, latitude].
-      // Leaflet wants them as [latitude, longitude] — the opposite order.
-      // So we flip each pair around.
       const latLngs = feature.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
 
-      // Remove the previous polygon if there was one.
       if (currentPolygon) {
         map.removeLayer(currentPolygon);
       }
 
-      // Draw the new polygon in red on the map.
       currentPolygon = L.polygon(latLngs, {
-        color: '#b00',
-        fillColor: '#b00',
+        color: color,
+        fillColor: color,
         fillOpacity: 0.2
       }).addTo(map);
 
-      // Zoom the map to fit the polygon perfectly.
       map.fitBounds(currentPolygon.getBounds());
-
-      // Show the map box and update the title above it.
       mapContainer.style.display = 'block';
       mapTitle.textContent = feature.properties.headline;
-
-      // Leaflet sometimes gets confused when shown after being hidden.
-      // This line tells it to recalculate its size.
       map.invalidateSize();
-
-      // Scroll the map into view smoothly.
       mapContainer.scrollIntoView({ behavior: 'smooth' });
     }
 
     function load(type, button) {
-
-      // Highlight the active button.
       document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
       button.classList.add('active');
 
-      // Clear old warnings and hide the map.
       warningsDiv.innerHTML = '';
       mapContainer.style.display = 'none';
       status.textContent = 'Loading...';
 
-      const url = '/api/warnings?event=' + encodeURIComponent(type);
+      const color = getColor(type);
+      const url   = '/api/warnings?event=' + encodeURIComponent(type);
 
       fetch(url)
         .then(response => response.json())
@@ -161,19 +181,36 @@
           features.forEach(feature => {
             const p = feature.properties;
 
+            // Work out start and expiry as timestamps (milliseconds).
+            // That's what Date.now() uses so we can subtract them.
+            const start   = new Date(p.effective).getTime();
+            const expires = new Date(p.expires).getTime();
+
             const card = document.createElement('div');
             card.className = 'warning';
+            card.style.borderColor = color;
 
             card.innerHTML = `
               <h2>${p.headline}</h2>
               <p><strong>Area:</strong> ${p.areaDesc}</p>
               <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
+              <div class="timer-bar">
+                <div class="timer-left"  style="background:${color}"></div>
+                <div class="timer-right" style="background:${color}"></div>
+              </div>
             `;
 
-            // When the card is clicked, call showMap with the full feature
-            // so it has access to both the geometry and the properties.
-            card.addEventListener('click', () => showMap(feature));
+            // Grab the two bar halves we just created.
+            const leftEl  = card.querySelector('.timer-left');
+            const rightEl = card.querySelector('.timer-right');
 
+            // Set the bar immediately so it doesn't start at full width.
+            updateBar(leftEl, rightEl, start, expires);
+
+            // Then update it every second so it visibly ticks down.
+            setInterval(() => updateBar(leftEl, rightEl, start, expires), 1000);
+
+            card.addEventListener('click', () => showMap(feature, color));
             warningsDiv.appendChild(card);
           });
         })
