@@ -1,2 +1,61 @@
-hello
-Storm tracker is being built :)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Live Severe Thunderstorm Warnings</title>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { color: #b00; }
+    .warning { border: 2px solid #b00; border-radius: 6px; padding: 1rem; margin-bottom: 1rem; }
+    .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .warning p { margin: 0; font-size: 0.9rem; color: #333; }
+    #status { color: #555; font-style: italic; }
+  </style>
+</head>
+<body>
+
+  <h1>⛈️ Live Severe Thunderstorm Warnings</h1>
+  <p id="status">Loading...</p>
+  <div id="warnings"></div>
+
+  <script>
+
+    const status   = document.getElementById('status');
+    const warnings = document.getElementById('warnings');
+
+    const API_URL = '/api/warnings';
+
+    fetch(API_URL)
+      .then(response => response.json())
+      .then(data => {
+
+        const features = data.features;
+
+        status.textContent = features.length > 0
+          ? `${features.length} active severe thunderstorm warning(s) as of ${new Date().toLocaleTimeString()}.`
+          : 'No active severe thunderstorm warnings right now.';
+
+        features.forEach(feature => {
+          const p = feature.properties;
+
+          const card = document.createElement('div');
+          card.className = 'warning';
+
+          card.innerHTML = `
+            <h2>${p.headline}</h2>
+            <p><strong>Area:</strong> ${p.areaDesc}</p>
+            <p><strong>Expires:</strong> ${new Date(p.expires).toLocaleString()}</p>
+          `;
+
+          warnings.appendChild(card);
+        });
+      })
+      .catch(error => {
+        status.textContent = 'Could not load warnings — check your connection.';
+        console.error(error);
+      });
+
+  </script>
+
+</body>
+</html>
