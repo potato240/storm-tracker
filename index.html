@@ -2,116 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Live Weather Warnings</title>
-
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-
-  <style>
-    body { font-family: sans-serif; max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
-    h1 { color: #b00; }
-    .buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
-    button {
-      padding: 0.5rem 1rem;
-      border: 2px solid #b00;
-      border-radius: 6px;
-      background: white;
-      color: #b00;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
-    button.active { background: #b00; color: white; }
-    .warning {
-      border: 2px solid #ccc;
-      border-radius: 6px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      cursor: pointer;
-      overflow: hidden;
-      position: relative;
-    }
-    .warning:hover { background: #fafafa; }
-    .warning h2 { margin: 0 0 0.5rem; font-size: 1rem; }
-    .warning p { margin: 0; font-size: 0.9rem; color: #333; }
-
-    .card-footer {
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 0.75rem;
-    }
-    .eas-button {
-      padding: 0.25rem 0.75rem;
-      font-size: 0.8rem;
-      border-radius: 4px;
-      border: 1.5px solid currentColor;
-      background: white;
-      cursor: pointer;
-    }
-
-    #status { color: #555; font-style: italic; }
-
-    /* Sits between the footer and the timer bar.
-       text-align centres the emoji above the middle of the bar. */
-    .map-indicator {
-      text-align: center;
-      font-size: 0.85rem;
-      margin-top: 0.5rem;
-      margin-bottom: 0.25rem;
-      line-height: 1;
-    }
-
-    .timer-bar {
-      position: relative;
-      height: 6px;
-      background: #eee;
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .timer-left {
-      position: absolute;
-      left: 0; top: 0;
-      height: 100%;
-      width: 50%;
-      transition: width 1s linear;
-    }
-    .timer-right {
-      position: absolute;
-      right: 0; top: 0;
-      height: 100%;
-      width: 50%;
-      transition: width 1s linear;
-    }
-
-    #map-container { display: none; margin-bottom: 1.5rem; }
-    #map-title { font-weight: bold; margin-bottom: 0.5rem; color: #b00; }
-    #map { height: 350px; border-radius: 6px; border: 2px solid #b00; }
-
-    #overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.5);
-      z-index: 1000;
-    }
-    #popup {
-      position: fixed;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: white;
-      border-radius: 8px;
-      padding: 1.5rem;
-      max-width: 600px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
-      z-index: 1001;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    }
-    #popup-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 1rem;
-    }
-    #po
+  <title>Test</title>
+</head>
+<body>
+  <p id="status">Loading...</p>
+  <script>
+    fetch('/api/warnings?event=Special%20Weather%20Statement')
+      .then(r => r.json())
+      .then(data => {
+        document.getElementById('status').textContent =
+          'Got ' + data.features.length + ' warnings.';
+      })
+      .catch(err => {
+        document.getElementById('status').textContent = 'Error: ' + err.message;
+      });
+  </script>
+</body>
+</html>
