@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Live Weather Warnings</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌪️</text></svg>">
 
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -188,12 +189,12 @@
     let currentLayers = [];
 
     const COLORS = {
-      'Tornado Warning':               '#cc0000',
-      'Tornado Watch':                 '#ff8c00',
-      'Red Flag Warning':              '#800080',
-      'Special Weather Statement':     '#c8a96e',
-      'Severe Thunderstorm Warning':   '#cccc00',
-      'Severe Thunderstorm Watch':     '#4a90d9'
+      'Tornado Warning':             '#cc0000',
+      'Tornado Watch':               '#ff8c00',
+      'Red Flag Warning':            '#800080',
+      'Special Weather Statement':   '#c8a96e',
+      'Severe Thunderstorm Warning': '#cccc00',
+      'Severe Thunderstorm Watch':   '#4a90d9'
     };
 
     function getColor(type) {
