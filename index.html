@@ -146,7 +146,8 @@
     <button onclick="load('Special Weather Statement', this)">Special Weather Statements</button>
     <button onclick="load('Severe Thunderstorm Warning', this)">Severe Thunderstorm</button>
     <button onclick="load('Red Flag Warning', this)">Red Flag</button>
-    <button onclick="load('Tornado Warning', this)">Tornado</button>
+    <button onclick="load('Tornado Warning', this)">Tornado Warning</button>
+    <button onclick="load('Tornado Watch', this)">Tornado Watch</button>
   </div>
 
   <p id="status">Choose a warning type above.</p>
@@ -183,15 +184,14 @@
       attribution: '© OpenStreetMap contributors'
     }).addTo(map);
 
-    // We now store multiple polygons at once — one per zone —
-    // so we keep them in an array instead of a single variable.
     let currentLayers = [];
 
     const COLORS = {
       'Tornado Warning':             '#cc0000',
       'Red Flag Warning':            '#800080',
       'Special Weather Statement':   '#c8a96e',
-      'Severe Thunderstorm Warning': '#cccc00'
+      'Severe Thunderstorm Warning': '#cccc00',
+      'Tornado Watch':               '#ff8c00'
     };
 
     function getColor(type) {
@@ -219,7 +219,6 @@
       rightEl.style.width = remaining + '%';
     }
 
-    // Remove whatever polygons are currently on the map.
     function clearLayers() {
       currentLayers.forEach(layer => map.removeLayer(layer));
       currentLayers = [];
@@ -229,7 +228,6 @@
 
       clearLayers();
 
-      // If the warning already has a polygon, draw it directly — same as before.
       if (feature.geometry && feature.geometry.coordinates) {
         const latLngs = feature.geometry.coordinates[0].map(c => [c[1], c[0]]);
         const poly = L.polygon(latLngs, {
@@ -239,27 +237,13 @@
 
       } else {
 
-        // No polygon — so we use the zone codes instead.
-        // affectedZones is a list of URLs, one per zone, like:
-        // "https://api.weather.gov/zones/forecast/NJZ002"
-        // We fetch each one, get its boundary shape, and draw it.
-        const zoneUrls = feature.properties.affectedZones;
-
-        // fetch() all the zones at the same time rather than one by one.
-        // Promise.all means "wait until every fetch is done, then continue."
+        const zoneUrls  = feature.properties.affectedZones;
         const responses = await Promise.all(zoneUrls.map(url => fetch(url)));
         const zones     = await Promise.all(responses.map(r => r.json()));
-
-        // Each zone comes back as a GeoJSON object with its own geometry.
-        // We draw a polygon for each one.
-        const allLatLngs = [];
 
         zones.forEach(zone => {
           if (!zone.geometry || !zone.geometry.coordinates) return;
 
-          // Zones can be Polygons or MultiPolygons.
-          // A Polygon has one ring of coordinates.
-          // A MultiPolygon has several — we handle both.
           const coords = zone.geometry.type === 'MultiPolygon'
             ? zone.geometry.coordinates.flat(1)
             : zone.geometry.coordinates;
@@ -270,20 +254,17 @@
               color, fillColor: color, fillOpacity: 0.2
             }).addTo(map);
             currentLayers.push(poly);
-            allLatLngs.push(...latLngs);
           });
         });
 
-        if (allLatLngs.length === 0) {
+        if (currentLayers.length === 0) {
           alert('Could not load zone boundaries for this warning.');
           return;
         }
       }
 
-      // Zoom to fit all the polygons we just drew.
       const group = L.featureGroup(currentLayers);
       map.fitBounds(group.getBounds());
-
       mapContainer.style.display = 'block';
       mapTitle.textContent = feature.properties.headline;
       map.invalidateSize();
