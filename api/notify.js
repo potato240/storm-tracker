@@ -31,7 +31,7 @@ export default async function handler(req, res) {
 
       if (!alreadySent) {
         await client.messages.create({
-          body: `🌪️ TORNADO WARNING\n${headline}\nArea: ${areaDesc}`,
+          body: `TORNADO WARNING\n${headline}\nArea: ${areaDesc}`,
           from: process.env.TWILIO_PHONE_NUMBER,
           to: process.env.TWILIO_TEST_NUMBER,
         });
