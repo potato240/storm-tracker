@@ -1,5 +1,7 @@
+import { Redis } from '@upstash/redis';
 import twilio from 'twilio';
-import { kv } from '@vercel/kv';
+
+const redis = Redis.fromEnv();
 
 const client = twilio(
   process.env.TWILIO_ACCOUNT_SID,
@@ -32,7 +34,7 @@ export default async function handler(req, res) {
       const headline = warning.properties.headline;
       const areaDesc = warning.properties.areaDesc;
 
-      const alreadySent = await kv.get(`warning:${warningId}`);
+      const alreadySent = await redis.get(`warning:${warningId}`);
 
       if (!alreadySent) {
         await client.messages.create({
@@ -41,7 +43,7 @@ export default async function handler(req, res) {
           to: process.env.TWILIO_TEST_NUMBER,
         });
 
-        await kv.set(`warning:${warningId}`, '1', { ex: 86400 });
+        await redis.set(`warning:${warningId}`, '1', { ex: 86400 });
         textsSent++;
       }
     }
@@ -56,6 +58,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: error.message });
   }
 }
-
-
-
