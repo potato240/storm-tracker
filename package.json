@@ -1,8 +1,0 @@
-{
-  "name": "weather-alerts",
-  "version": "1.0.0",
-  "dependencies": {
-    "twilio": "^4.10.0",
-    "@upstash/redis": "^1.28.0"
-  }
-}
